@@ -1,16 +1,16 @@
 # Base image for ARM with CUDA
-FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
+FROM nvidia/cuda:12.2.0-devel-ubuntu22.04
 
 WORKDIR /app
 
 # Installing necessary packages
 RUN apt-get update && apt-get install -y wget git
 
-# Installing Miniconda for ARM
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh \
-    && chmod 700 Miniconda3-latest-Linux-aarch64.sh \
-    && ./Miniconda3-latest-Linux-aarch64.sh -b \
-    && rm Miniconda3-latest-Linux-aarch64.sh
+# Installing Miniconda
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+    && chmod 700 Miniconda3-latest-Linux-x86_64.sh \
+    && ./Miniconda3-latest-Linux-x86_64.sh -b \
+    && rm Miniconda3-latest-Linux-x86_64.sh
 
 ENV PATH="/root/miniconda3/bin:${PATH}"
 RUN conda create -n venv python=3.10.13 -y \
@@ -18,30 +18,21 @@ RUN conda create -n venv python=3.10.13 -y \
 ENV PATH="/root/miniconda3/envs/venv/bin:${PATH}"
 
 # Installing CUDA toolkit matching the CUDA version from the base image
-RUN CUDA_VERSION="11.8.0" && \
+RUN CUDA_VERSION="12.2.0" && \
     CUDA_VERSION_MAJOR=$(echo $CUDA_VERSION | cut -d'.' -f1) && \
     CUDA_VERSION_MINOR=$(echo $CUDA_VERSION | cut -d'.' -f2) && \
     CUDA_VERSION_SIMPLE="${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}.0" && \
     conda install nvidia/label/cuda-${CUDA_VERSION_SIMPLE}::cuda-toolkit -y
 
-# Vllm patch for cuda118
-COPY cu118_vllm_patch.sh /app/cu118_vllm_patch.sh
-RUN chmod +x /app/cu118_vllm_patch.sh \
-    && /app/cu118_vllm_patch.sh
-
-# Add PyTorch installation command before installing other requirements
-RUN pip install torch==1.13.0 torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
-
-# Install Python packages from requirements.txt and include custom index for auto-gptq
 COPY llm_server/requirements.txt ./app/requirements.txt
-RUN pip install --no-cache-dir -r ./app/requirements.txt \
-    --extra-index-url auto-gptq==0.6.0 --extra-index-url https://huggingface.github.io/autogptq-index/whl/cu118/ \
+RUN pip install -r ./app/requirements.txt \
     && pip install huggingface_hub[hf_transfer]
 
 COPY llm_server/app /app/app
 
 COPY llm_server/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
 
 ENV HF_HUB_ENABLE_HF_TRANSFER=1
 
